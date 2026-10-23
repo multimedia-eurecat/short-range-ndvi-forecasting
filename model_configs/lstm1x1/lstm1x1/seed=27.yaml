@@ -1,0 +1,115 @@
+Architecture: "convlstm_ae"
+Seed: 27
+
+Setting: &setting "replicate" # "greenearthnet"
+
+context_length: &context_length 3
+target_length: &target_length 1
+lc_min: &lc_min 10
+lc_max: &lc_max 40
+seq_len: &seq_len 4 # context_length + target_length 
+
+
+Logger:
+    save_dir: "experiments/bmvc/residual/ndvi_ndwi_w" # TODO
+
+Checkpointer:
+    monitor: loss_val
+    mode: min
+    save_top_k: 1
+    save_last: True
+    every_n_epochs: 10
+    filename: "Epoch-{epoch:02d}-loss-{loss_val:.6f}"
+
+Trainer:
+    accelerator: gpu
+    devices: 1  # n/1
+    strategy: auto # ddp/auto
+    log_every_n_steps: 1 
+    max_epochs: 50
+    gradient_clip_val: 1
+    precision: 32
+    num_sanity_val_steps: 0
+    accumulate_grad_batches: 1 # TODO
+
+Data: 
+    dataset_name: *setting
+    seq_len: *seq_len
+    context_len: *context_length
+    replicate_stride: 1 # *seq_len # only for trin, for validation is kept 1
+    input_mode: "ndvi_ndwi" # TODO
+    fp16: False
+    train_batch_size: 4 # TODO
+    val_batch_size: 1
+    test_batch_size: 1
+    num_workers: 7
+# Data: 
+#     base_dir: "/global/home/cynthia.ugwu/replicate/REPLICATE_DATA/greenearthnet"
+#     input_mode: "ndvi_cloud_nextcloud"
+#     seq_len: *seq_len
+#     dataset_name: *setting
+#     train_batch_size: 1
+#     val_batch_size: 1
+#     test_batch_size: 1
+#     num_workers: 1
+#     greenearth_sub_class: iid 
+#     greenearth_cloud_ratio: 0.4 
+#     greenearth_trim_time: -1 
+#     fp16: False
+
+
+Task:
+    setting: *setting
+    context_length: *context_length
+    target_length: *target_length
+    n_stochastic_preds: 1 # some model have some stochasticicty that we may be interedt to
+    viz_every_n_epochs: 10
+    compute_metric_on_test: True
+    save_viz_to_disk: False
+    log_viz_to_tensorboard: False
+    viz_residual_scale: 0.5
+    vmin: -0.5 # visualization range
+    vmax: 0.9 # visualization range
+    loss:
+        name: "L2NDVILoss" # "L2NDVILoss" or "L2NDVIGradRankLoss"
+        lc_min: *lc_min
+        lc_max: *lc_max
+        n_pred_channels: 1 # TODO
+        n_targ_channels: 1 # TODO
+        use_cloud_mask: True  # TODO
+        use_lc_mask: False  
+    optimization:
+        optimizer:
+            - 
+                name: AdamW
+                args: 
+                    lr: 0.00005 # 0.00000125 0.00005
+                    betas: [0.9, 0.999]
+                    weight_decay: 0.00001  
+        lr_schedule: []
+    metric: RMSE
+    metric_kwargs:
+        context_length: *context_length
+        target_length: *target_length
+        lc_min: *lc_min
+        lc_max: *lc_max
+        n_pred_channels: 1
+        n_targ_channels: 1
+
+
+Model:
+    setting: *setting
+    context_length: *context_length
+    target_length: *target_length
+    hidden_dim: [64, 64, 64, 64]
+    kernel_size: 1
+    bias: True
+    skip_connections: False # Set False If predict_delta_from_last is True for T=1 future predictions 
+    num_inputs: 13 # TODO in_channels (+ clouds + weather_channels) + static
+    num_outputs: 1 # TODO ndvi (+ clouds)
+    target: anomalie_ndvi # rescale between -1 and 1
+    teacher_forcing: True
+    decoder_input_subtract_s2bands: False
+    weather_is_aggregated: True # keep True otherwise is not working
+    use_weather: True # TODO
+    predict_delta_from_last: True # TODO

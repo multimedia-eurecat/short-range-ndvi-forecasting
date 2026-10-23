@@ -1,0 +1,2 @@
+from .earthnet2021x_custom_datamodule import EarthNet2021XCustomDataModule
+
